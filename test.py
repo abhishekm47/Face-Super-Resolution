@@ -1,11 +1,20 @@
-from dlib_alignment import dlib_detect_face, face_recover
+from .dlib_alignment import dlib_detect_face, face_recover
 import torch
 from PIL import Image
 import torchvision.transforms as transforms
-from models.SRGAN_model import SRGANModel
+from .models.SRGAN_model import SRGANModel
 import numpy as np
 import argparse
 import utils
+from .utils import read_cv2_img
+import re
+import os
+from glob import glob
+from pathlib import Path
+
+#search files and their paths
+def _find_filenames(file_dir_path, file_pattern): return list(
+	file_dir_path.glob(file_pattern))
 
 _transform = transforms.Compose([transforms.ToTensor(),
                                  transforms.Normalize(mean=[0.5, 0.5, 0.5],
@@ -14,7 +23,7 @@ _transform = transforms.Compose([transforms.ToTensor(),
 
 def get_FaceSR_opt():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--gpu_ids', type=str, default=None)
+    parser.add_argument('--gpu_ids', type=str, default='0')
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--lr_G', type=float, default=1e-4)
     parser.add_argument('--weight_decay_G', type=float, default=0)
@@ -58,19 +67,28 @@ def get_FaceSR_opt():
     parser.add_argument('--D_nf', type=int, default=64)
 
     # data dir
-    parser.add_argument('--pretrain_model_G', type=str, default='90000_G.pth')
-    parser.add_argument('--pretrain_model_D', type=str, default=None)
+    parser.add_argument('--pretrain_model_G', type=str, default='/home/ubuntu/babble-lipsyncs/Face_Super_Resolution/checkpoints/90000_G.pth')
+    parser.add_argument('--pretrain_model_D', type=str, default="/home/ubuntu/babble-lipsyncs/Face_Super_Resolution/checkpoints/90000_D.pth")
 
     args = parser.parse_args()
 
     return args
 
 
+
 sr_model = SRGANModel(get_FaceSR_opt(), is_train=False)
 sr_model.load()
 
-def sr_forward(img, padding=0.5, moving=0.1):
-    img_aligned, M = dlib_detect_face(img, padding=padding, image_size=(128, 128), moving=moving)
+
+
+
+def sr_forward(frame_path, landmark, padding=0.5, moving=0.1):
+    img = read_cv2_img(frame_path)
+    try:
+        img_aligned, M = dlib_detect_face(img, landmark, padding=padding, image_size=(128, 128), moving=moving)
+    except:
+        print("can't find faces saving original frame as it is ........")
+        return img, img
     input_img = torch.unsqueeze(_transform(Image.fromarray(img_aligned)), 0)
     sr_model.var_L = input_img.to(sr_model.device)
     sr_model.test()
@@ -79,9 +97,4 @@ def sr_forward(img, padding=0.5, moving=0.1):
     rec_img = face_recover(output_img, M * 4, img)
     return output_img, rec_img
 
-img_path = 'input.jpg'
-img = utils.read_cv2_img(img_path)
-output_img, rec_img = sr_forward(img)
-utils.save_image(output_img, 'output_face.jpg')
-utils.save_image(rec_img, 'output_img.jpg')
 

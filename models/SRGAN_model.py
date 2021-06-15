@@ -3,10 +3,11 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 from torch.nn.parallel import DataParallel, DistributedDataParallel
-import models.networks as networks
-import models.lr_scheduler as lr_scheduler
+
+from . import networks as networks
+from . import lr_scheduler as lr_scheduler
 from .base_model import BaseModel
-from models.modules.loss import GANLoss
+from .modules.loss import GANLoss
 
 
 logger = logging.getLogger('base')
@@ -21,10 +22,10 @@ class SRGANModel(BaseModel):
         # define networks and load pretrained models
         self.netG = networks.define_G(opt).to(self.device)
         self.netG = DataParallel(self.netG)
+        self.netG.to(f'cuda:{self.netG.device_ids[0]}')
         if self.is_train:
             self.netD = networks.define_D(opt).to(self.device)
             self.netD = DataParallel(self.netD)
-
             self.netG.train()
             self.netD.train()
 
@@ -188,7 +189,7 @@ class SRGANModel(BaseModel):
     def test(self):
         self.netG.eval()
         with torch.no_grad():
-            self.fake_H = self.netG(self.var_L)
+            self.fake_H = self.netG(self.var_L).to(self.device)
         self.netG.train()
 
     def get_current_log(self):
