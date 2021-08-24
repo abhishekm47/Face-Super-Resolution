@@ -79,6 +79,7 @@ def display_online_results(visuals, steps, vis_saved_dir, show_size=128):
     title_img = get_title(labels, show_size)
     save_images = np.concatenate([title_img, save_images], axis=0)
     save_image(save_images, os.path.join(vis_saved_dir, 'display_' + str(steps) + '.jpg'))
+    return save_images
 
 
 def save_image(image_numpy, image_path):

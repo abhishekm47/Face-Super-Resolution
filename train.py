@@ -9,12 +9,14 @@ from models.SRGAN_model import SRGANModel
 import torch
 
 
+from torch.utils.tensorboard import SummaryWriter
+
 def main():
     #### options
     parser = argparse.ArgumentParser()
     parser.add_argument('--gpu_ids', type=str, default='0,1,2,3,4,5,6,7')
 
-    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--batch_size', type=int, default=1)
     parser.add_argument('--dev_ratio', type=float, default=0.01)
     parser.add_argument('--lr_G', type=float, default=1e-4)
     parser.add_argument('--weight_decay_G', type=float, default=0)
@@ -42,7 +44,7 @@ def main():
     parser.add_argument('--val_freq', type=int, default=1000)
     parser.add_argument('--save_freq', type=int, default=10000)
     parser.add_argument('--crop_size', type=float, default=0.85)
-    parser.add_argument('--lr_size', type=int, default=128)
+    parser.add_argument('--lr_size', type=int, default=512)
     parser.add_argument('--hr_size', type=int, default=512)
 
     # network G
@@ -58,11 +60,12 @@ def main():
     parser.add_argument('--D_nf', type=int, default=32)
 
     # data dir
-    parser.add_argument('--hr_path', type=list, default=['data/celebahq-512/', 'data/ffhq-512/'])
-    parser.add_argument('--lr_path', type=str, default='data/lr-128/')
+    parser.add_argument('--hr_path', type=list, default=['data_hr/'])
+    parser.add_argument('--lr_path', type=str, default='data_lr/')
     parser.add_argument('--checkpoint_dir', type=str, default='check_points/ESRGAN-V1/')
     parser.add_argument('--val_dir', type=str, default='dev_show')
     parser.add_argument('--training_state', type=str, default='check_points/ESRGAN-V1/state/')
+    parser.add_argument('--log_dir', type=str, default='check_points/ESRGAN-V1/log/')
 
     # resume the training
     parser.add_argument('--resume_state', type=str, default=None)
@@ -73,6 +76,8 @@ def main():
     parser.add_argument('--log_file', type=str, default='log.txt')
     args = check_args(parser.parse_args())
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_ids
+    
+    writer = SummaryWriter(args.log_dir)
 
     #### loading resume state if exists
     if args.resume_state is not None:
@@ -128,10 +133,12 @@ def main():
 
             #### log
             if current_step % args.print_freq == 0:
+                writer.add_scalar('learning_rate:', model.get_current_learning_rate(), current_step)
                 logs = model.get_current_log()
                 message = '<epoch:{:3d}, iter:{:8,d}, lr:{:.3e}> '.format(
                     epoch, current_step, model.get_current_learning_rate())
                 for k, v in logs.items():
+                    writer.add_scalar(k, v, current_step)
                     message += '{:s}: {:.4e} '.format(k, v)
                 print(message)
 
@@ -148,7 +155,8 @@ def main():
                 model.test()
 
                 visuals = model.get_current_visuals()
-                display_online_results(visuals, current_step, show_dir, show_size=args.hr_size)
+                outImage = display_online_results(visuals, current_step, show_dir, show_size=args.hr_size)
+                writer.add_image("current_visuals", outImage, step=current_step)
 
             #### save models and training states
             if current_step % args.save_freq == 0:
